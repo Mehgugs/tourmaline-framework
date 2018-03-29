@@ -1,6 +1,6 @@
-local util = require"libs/util"
-local syntax = require"libs/syntax"
-local oop = require"libs/oo"
+local util = require"util"
+local syntax = require"syntax"
+local oop = require"oo"
 local discordia = require"discordia"
 
 
@@ -25,13 +25,13 @@ function Command:initial( options )
     options.__commands = nil
     options.__aliases = nil
     if options.module == nil then 
-        options.module = T.NONE 
+        options.module = "tourmaline/misc"
     end
     util.merge(self, options)
     
-    atc()
-        assert(isFunction(self.body) and isString(self.name) and isString(self.prefix))
-    reset()
+    -- atc()
+    --     assert(isFunction(self.body) and isString(self.name) and isString(self.prefix))
+    -- reset()
 
     self._logger = discordia.Logger(3, "!%F %T")
     self.nonce = self.prefix .. self.name
@@ -57,7 +57,7 @@ function Command:__call(msg, args)
     if not self._userId then self._userId = msg.client.user.id end
     local executed = false;
     if self:valid(msg) then
-        local success, err = pcall(self.body,self,msg,syntax.std(args))
+        local success, err = pcall(self.body,self,msg,args and syntax.std(args))
         executed = success
         if not success then 
             self:error("had runtime-error: %s", err)
@@ -112,4 +112,9 @@ function Command.messageCreate( msg )
     end
 end
 
+Command:static"enrich"
+function Command.enrich( discordiaClient )
+    discordiaClient:on("messageCreate", Command.messageCreate)
+    discordiaClient.__command = Command
+end
 return Command

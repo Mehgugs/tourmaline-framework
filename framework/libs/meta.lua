@@ -35,6 +35,21 @@ function meta.reset(  )
     setmetatable(getfenv(2), meta.old)
 end
 
+local expr = {}
+
+function expr:__index(k)
+    self[k] = function(value)
+        return kv{k, value}
+    end
+    return self[k]
+end
+
+function meta.express()
+    local env = getfenv(2)
+    meta.old = getmetatable(env)
+    setmetatable(env, expr)
+end
+
 function meta.import()
     local env = getfenv(2)
     for k,v in pairs(meta) do 

@@ -10,7 +10,7 @@ local kv = function (vin) return setmetatable(vin, kv_resolver) end
 function kv_resolve( args )
     local out = {}
     for k,v in pairs(args) do 
-        if v.__kvr then 
+        if type(v) == 'table' and v.__kvr then 
             out[v[1]] = v[2]
         else
             out[k] = v
@@ -107,5 +107,6 @@ return {
     kv = kv,
     kv_resolve = kv_resolve,
     parse = parse,
-    cut = cut
+    cut = cut,
+    std = parse.std
 }

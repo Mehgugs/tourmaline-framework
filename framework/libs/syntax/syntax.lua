@@ -1,7 +1,4 @@
---## Syntax
--- Utilities for parsing input and converting it to more useful data structures
--- key-value resolvers (for properties) live here.
---;
+require"util"
 require"discordia".extensions.string()
 local kv_resolver = {__kvr = true} kv_resolver.__index = kv_resolver
 
@@ -102,6 +99,11 @@ function parse.std(str)
     end
     return arglist
 end
+
+--LPEG patterns
+
+local LPEG = require"lpeg"
+
 
 return {
     kv = kv,

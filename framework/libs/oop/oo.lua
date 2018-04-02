@@ -32,7 +32,7 @@ local function extender(base,t)
   sub.__base = base
   return setmetatable(newObject(sub), {__index = base})
 end
-local Object = newObject(); function Object:initial()end
+local Object = newObject{__info = "tourmaline/object"}; function Object:initial()end
 
 function Object:new (...)
   -- constructor
@@ -45,6 +45,18 @@ function Object:extend (t)
 end
 function Object:static( name )
   static[self][name] = true
+  return self
+end
+
+local function mix( self, cls )
+  if cls == 'string' then cls = require(cls) end
+  for k,v in pairs(cls) do 
+    if k:sub(1,2) ~= '__' then self[k] = v end
+  end
+end
+
+function Object:mix( ... )
+  for _, obj in ipairs{...} do mix(self, obj) end
   return self
 end
 

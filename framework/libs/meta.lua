@@ -1,4 +1,4 @@
-require "util"
+local util = require "util"
 
 local meta = {}
 local atc = {}
@@ -55,6 +55,37 @@ function meta.import()
     for k,v in pairs(meta) do 
         env[k] = v
     end
+end
+
+local marked = {}
+local decorators = {}
+function marked:__newindex( key, value )
+    if self.__DECORATOR and type(value) == 'function' then 
+        local f = self.__DECORATOR(value)
+        rawset(self, "__DECORATOR", nil)
+        return rawset(self, key, f)
+    else
+        return rawset(self, key, value)
+    end
+end
+
+function marked:__index( key )
+    if decorators[key] then
+        rawset(self, "__DECORATOR", decorators[key])
+        return function() end
+    else
+        return oldG[key]
+    end
+end
+
+function meta.decorator( fname, f )
+    decorators[fname] = f
+end
+
+function meta.markers()
+    local env = getfenv(2)
+    meta.old = getmetatable(env)
+    setmetatable(env, marked)
 end
 
 return meta

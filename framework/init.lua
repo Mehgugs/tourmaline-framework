@@ -3,5 +3,5 @@ return {
     plugin = require"./libs/plugin",
     Command = require"./libs/command",
     util = require"./libs/util",
-    oop = require"./libs/oo"
+    oop = require"./libs/oop/oo",
 }

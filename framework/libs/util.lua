@@ -59,6 +59,13 @@ function util.merge(t1, t2)
     return t1
 end
 
+local insert = table.insert
+function util.mergeLists(l1, l2)
+    for _, v in ipairs(l2) do 
+        insert(l1, v)
+    end
+end
+
 function util.foldWithArgs( l, f, a,...)
     for k, v in ipairs(l) do
         a = f(a,k,v,...)

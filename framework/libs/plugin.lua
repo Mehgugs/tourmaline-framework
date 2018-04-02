@@ -1,5 +1,5 @@
 local util = require"util"
-local oop = require"oo"
+local oop = require"oop/oo"
 local discordia = require"discordia"
 local meta = require"meta"
 
@@ -161,13 +161,13 @@ local function reload(name)
     local loaded, plg = loadPlugin(plugin._file)
     plugin._state = loaded
     if loaded then
-        Logger:log(3,"Reloaded blob:%s@%s",plugin._name, plugin._file)
+        Logger:log(3,"Reloaded plugin:%s@%s",plugin._name, plugin._file)
         if plugin.onReload then
             pcall(plugin.onReload,plugin,msg)
         end
         return true,plg
     else
-        Logger:log(1,"Failed to reload blob:%s@%s",plugin._name, plugin._file)
+        Logger:log(1,"Failed to reload plugin:%s@%s",plugin._name, plugin._file)
         return false
     end
 end

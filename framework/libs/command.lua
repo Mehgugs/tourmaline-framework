@@ -1,6 +1,6 @@
 local util = require"util"
 local syntax = require"syntax"
-local oop = require"oo"
+local oop = require"oop/oo"
 local discordia = require"discordia"
 
 
@@ -13,6 +13,7 @@ Command = Object:extend{
 }
 
 function Command:extend( options )
+    options = options or {}
     options = syntax.kv_resolve(options)
     options.__commands = nil
     options.__aliases = nil

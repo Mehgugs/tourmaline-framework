@@ -49,7 +49,7 @@ function Object:static( name )
 end
 
 local function mix( self, cls )
-  if cls == 'string' then cls = require(cls) end
+  if type(cls) == 'string' then cls = require(cls) end
   for k,v in pairs(cls) do 
     if k:sub(1,2) ~= '__' then self[k] = v end
   end

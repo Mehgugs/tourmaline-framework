@@ -20,8 +20,7 @@ local function printf(...)
     print(str .. (n > 0 and "\27[0m" or ""))
 end
 
-local Logger = require"oop/oo".Object
-:extend
+local Logger = require"oop/oo".Object:extend
 {
     __info = "tourmaline/loggable",
 }
@@ -29,15 +28,26 @@ local Logger = require"oop/oo".Object
 
 
 function Logger:newLevel( name, color )
-    self[name] = self:bindn(self.log, name, color)
+    self[name] = self:bindmethod(self.log, name, color)
     return self
+end
+
+local function fmtCheck( s, ... )
+    return s:count("[^%%]%%") <= select('#',...)
 end
 
 function Logger:log( level, color, msg, ... )
     local timeStamp = os.date"!%F %T"
-    local text = msg:format(...)
     local preamble = self.__info:suffix"tourmaline/"
-    printf("$magenta%s$reset;/$magenta;%s$reset;/$%s%s$reset;//%s", timeStamp, preamble, color, level, text )
+    if fmtCheck(msg, ...) then 
+        local text = msg:format(...)
+        printf("/$magenta;%s$reset;/$magenta;%s$reset;/$%s;%s$reset;> %s", timeStamp, preamble, color, level, text )
+    else
+        printf("/$magenta;%s$reset;/$magenta;%s$reset;/$%s;%s$reset;> %s", 
+            timeStamp, preamble, 'red', level.."-failed",
+            ("Problem logging output of: '%s'."):format(tostring(msg))
+        )
+    end
 end
 
 Logger:newLevel("info", "green")

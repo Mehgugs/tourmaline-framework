@@ -7,7 +7,6 @@ local client = discordia.Client()
 
 discordia.storage.client = client
 
-
 Tourmaline.plugin.setClient(client)
 Tourmaline.plugin.loadPlugins()
 

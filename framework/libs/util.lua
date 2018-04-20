@@ -76,10 +76,16 @@ end
 function util.reduce(f, a, t,...)
     local meta = getmetatable(t)
     local iterate = meta and meta.__iter or ipairs
-    for _, v in iterate(t) do
+    for k, v in iterate(t) do
         a = f(a,v,k,...)
     end
     return a
+end
+
+
+local prmt = {__iter = pairs}
+function util.pair_reducer( t )
+    return setmetatable(t, prmt)
 end
 
 
@@ -89,19 +95,25 @@ end
 
 function util.compose( ... )
     local funcs = {select(2,...)}
-    return _.reduce(compose2, (...),funcs)
+    return util.reduce(compose2, (...),funcs)
 end
 
 local mapreduction = function(state, value, index, func, ...) state[index] = func(value, ...); return state end
 function util.map( list, func, ... )
-    state = state or {}
-    return _.reduce(mapreduction, state, list, func, ...)
+    local state = {}
+    return util.reduce(mapreduction, state, list, func, ...)
 end
 
 local filterreduction = function( state, value, index, func) if func(value) then insert(state, value) end return state end
 function util.filter( list, func, state )
     state = state or {}
-    return _.reduce(filterreduction, state, list, func)
+    return util.reduce(filterreduction, state, list, func)
+end
+
+local filterreduction = function( state, value, index, func) if func(value) then insert(state, {index,value}) end return state end
+function util.filtered_pairs( list, func, state )
+    state = state or {}
+    return util.reduce(filterreduction, state, list, func)
 end
 
 

@@ -1,114 +1,117 @@
-require"util"
-require"discordia".extensions.string()
-local kv_resolver = {__kvr = true} kv_resolver.__index = kv_resolver
+local lpeg = require"lpeg"
+local P, S, R, V, C, Ct, Cg, l = lpeg.P, lpeg.S, lpeg.R, lpeg.V, lpeg.C, lpeg.Ct, lpeg.Cg, {} 
+lpeg.locale(l)
 
-local kv = function (vin) return setmetatable(vin, kv_resolver) end
+local function maybe(p) return p^-1 end
 
-function kv_resolve( args )
-    local out = {}
-    for k,v in pairs(args) do 
-        if type(v) == 'table' and v.__kvr then 
-            out[v[1]] = v[2]
-        else
-            out[k] = v
-        end
-    end
-    return out
+local syntax = {}
+local any = P(1)
+local space = l.space^0
+local escapedQuote = P'\\"'
+local quote = P'"'
+local non_quote = escapedQuote + (1 - quote) 
+local word = 1 - (quote + escapedQuote + l.space) 
+
+local quoted = (quote * C(non_quote^1) * quote) + C(word^1)
+
+local qstring = (space * quoted * space)^0
+syntax.qstring = Ct(qstring)
+
+
+local pipe_literal = P"|"
+local pipe_item = (quote * C((non_quote)^1) * quote) + C((1 - (quote + escapedQuote + l.space + pipe_literal))^1)
+local pipe_args = Ct((space * pipe_item * space)^0)
+local pipe_expr = Ct(pipe_args * (pipe_literal * pipe_args)^1)
+
+syntax.pipe = pipe_expr
+
+
+local nonce = Cg((1 - l.space)^1, "command")
+
+local command_string = Ct(nonce * space * Cg(syntax.qstring, "args"))
+
+
+
+syntax.command_string = command_string
+
+local function fix_pipe_expr(pipe)
+
+    return pipe,pipe[1]
 end
 
-local parse = {}
+local command_pipe = Ct(nonce * space * Cg(pipe_expr, "pipe"))
 
-local function cut(t, s) 
-    local bags = {{}}
-    local cur= bags[1]
-    for k,v in ipairs(t) do 
-        if s == v then 
-            table.insert(bags, {})
-            cur = bags[#bags]
-        else table.insert(cur, v) end  
-    end
-    return bags
-end
+syntax.command_pipe = command_pipe
 
-function parse.flags( list )
-    local kvpairs = {}
-    local waiting = nil
-    for i, item in ipairs(list) do 
-        if item:startswith("-") or item:startswith("--") then 
-            --new key
-            current = item:gsub("^%-+", "",1)
-            kvpairs[current] = true
-        elseif kvpairs[current] == true then
-            kvpairs[current] = item
-        elseif kvpairs[current] then
-            kvpairs[current] = kvpairs[current] .. item
-        end
-    end 
-    return kvpairs
-end
+syntax.command = command_pipe + command_string
 
-function parse.cmdline(s_in)
-    local arg_set = cut(s_in, '>')
-    local flags, pipes = parse.flags(arg_set[1]), {unpack(arg_set, 2)}
-    return flags, pipes
-end
+local digits = R'09'^1
+local mpm = maybe(S'+-')
+local dot = P'.'
+local exp = S'eE'
+local float = mpm * digits * maybe(dot*digits) * maybe(exp*mpm*digits)
 
-local function reduceQuotes( list )
-    local new = {{}}
-    local current
-    local escaped
-    for i = 1, #list do 
-      local c = list:sub(i,i)
-      if not escaped and c == '\\' then escaped = i end
-      if c == '"' and not current and not escaped then 
-        current = #new+1
-        new[#new] = table.concat(new[#new])
-        new[current] = {c}
-        goto continue
-      end
-      if current and c ~= '"' or escaped then
-        table.insert(new[current], c)
-      end
-      if current and c == '"' and not escaped then 
-        new[current] = table.concat(new[current]) .. c
-        current = nil
-        new[#new+1] = {}
-      end
-      if not current and c ~= '"' or escaped then 
-        table.insert(new[#new], c)
-      end
-      ::continue::
-    end
-    for i = #new, 1, -1 do 
-       if type(new[i]) == 'table' then new[i] = table.concat(new[i]) end
-    end
-    if escaped ~= i then escaped = nil end
-    return new
-end
-
-function parse.std(str)
-    local parts = reduceQuotes(str)
-    local arglist = { }
-    for _, arg in ipairs(parts) do 
-        if arg:sub(1,1) == '"' then 
-            insert(arglist, arg:sub(2, -2))
-        else
-            local prts = arg:split" "
-            for _, part in ipairs(prts) do if part ~= "" then insert(arglist, part) end end
-        end
-    end
-    return arglist
-end
-
---LPEG patterns
-
-local LPEG = require"lpeg"
-
-
-return {
-    kv = kv,
-    kv_resolve = kv_resolve,
-    parse = parse,
-    cut = cut,
-    std = parse.std
+local lisp_environment = {}
+local lisp_parser = P { --taken from https://gist.github.com/polymeris/857a7ae31db0d240ef3f and modified.
+    'program', -- initial rule
+    program   = Ct(V'sexpr' ^ 0),
+    wspace    = S' \n\r\t' ^ 0,
+    atom      = V'boolean' + V'number' + V'string' + V'symbol',
+        symbol  = C(((1 - S' \n\r\t\"\'()[]{}#@~')) ^ 1) /function (s) return lisp_environment[s] end,
+        boolean = C(P'true' + P'false') /lisp_environment,
+        number  = V'integer' + V'float',
+            integer = C(R'19' * R'09' ^ 0)/tonumber,
+            float   =  float/tonumber,
+        string  = S'"' * C((1 - S'"\n\r') ^ 0) * S'"',
+    coll      = V'list' + V'array',
+        list    = P'\'(' * Ct(V'expr' ^ 1) * P')',
+        array   = P'[' * Ct(V'expr' ^ 1) * P']',
+    expr      = V'wspace' * (V'coll' + V'atom' + V'sexpr'),
+    sexpr     = V'wspace' * P'(' * (V'symbol' + V'sexpr') * Ct(V'expr' ^ 0) * P')' / function(f, args) return f(args) end
 }
+
+local def = function(n, f) lisp_environment[n] = f end
+
+local function reduce(f, args) local head = args[1]; 
+    for i = 2, #args do head = f(head, args[i]) end 
+    return head 
+end
+local identity = function(t) return t end
+local function map(args) local out = {}
+    local f = lisp_environment[args[1]] or identity
+
+    for k,v in pairs(args) do 
+        out[k] = f(v) 
+    end
+end
+
+--built-in functions
+
+local function bind1(f, a) return function(...) return f(a, ...) end end
+local function bool(a) 
+    if a and a ~= lisp_environment["false"] then return true;
+    else return false end
+end
+def('+', bind1(reduce, function(a,b) return a + b end))
+def('-', bind1(reduce, function(a,b) return a - b end))
+def('*', bind1(reduce, function(a,b) return a * b end))
+def('/', bind1(reduce, function(a,b) return a / b end))
+def('true', function(a) return a[1] end)
+def('false', function(a) return a[2] end)
+def('if', function(a) return bool(a[1]) and a[2] or a[3] end)
+def('else', function(a) return not bool(a[1]) and lisp_environment['true'] or lisp_environment['false'] end)
+def('and', bind1(reduce, function(a, b) return bool(a) and bool(b) end))
+def('or', bind1(reduce, function(a, b) return bool(a) or bool(b) end))
+def('xor', bind1(reduce, function(a, b) return (bool(a) and  not bool(b))  or (not bool(a) and  bool(b)) end))
+def('=>', bind1(reduce, function(a, b) return (not bool(a)) or bool(b) end))
+def('not', function(a) return not bool(a[1]) end)
+
+syntax.lisp = {
+    def = def,
+    ENV = lisp_environment,
+    parser = lisp_parser,  
+}
+syntax.utf8 = require"syntax/utf8"
+syntax.re = require"syntax/re"
+
+return syntax

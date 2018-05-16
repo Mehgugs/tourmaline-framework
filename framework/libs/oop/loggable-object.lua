@@ -1,4 +1,5 @@
 require "util"
+local dlogger = require"discordia".Logger(4, "!%F %T")
 local colors = { 
     BLACK   = 30,
     RED     = 31,
@@ -17,18 +18,24 @@ local function printf(...)
             return "\27[0m"
         else return '' end 
     end)
-    print(str .. (n > 0 and "\27[0m" or ""))
+    return str .. (n > 0 and "\27[0m" or "")
 end
 
 local Logger = require"oop/oo".Object:extend
 {
     __info = "tourmaline/loggable",
+    __levels = {
+        debug = 4,
+        info  =3,
+        warn = 2,
+        error = 1
+    }
 }
 :mix("oop/bindable")
 
 
-function Logger:newLevel( name, color )
-    self[name] = self:bindmethod(self.log, name, color)
+function Logger:newLevel( name )
+    self[name] = self:bindmethod(self.log, name)
     return self
 end
 
@@ -36,23 +43,24 @@ local function fmtCheck( s, ... )
     return s:count("[^%%]%%") <= select('#',...)
 end
 
-function Logger:log( level, color, msg, ... )
+function Logger:log( level, msg, ... )
+    if level == 'debug' and self.__debug ~= true then return end
     local timeStamp = os.date"!%F %T"
     local preamble = self.__info:suffix"tourmaline/"
+    local text;
     if fmtCheck(msg, ...) then 
-        local text = msg:format(...)
-        printf("/$magenta;%s$reset;/$magenta;%s$reset;/$%s;%s$reset;> %s", timeStamp, preamble, color, level, text )
+        text =  printf("<$magenta;%s$reset;> %s", preamble, msg:format(...) )
     else
-        printf("/$magenta;%s$reset;/$magenta;%s$reset;/$%s;%s$reset;> %s", 
-            timeStamp, preamble, 'red', level.."-failed",
+        text = printf("<$magenta;%s$reset;> %s", preamble, 
             ("Problem logging output of: '%s'."):format(tostring(msg))
         )
     end
+    return dlogger:log(self.__levels[level], text)
 end
 
-Logger:newLevel("info", "green")
-Logger:newLevel("warn", "yellow")
-Logger:newLevel("error", "red")
-Logger:newLevel("debug", "blue")
+Logger:newLevel("info")
+Logger:newLevel("warn")
+Logger:newLevel("error")
+Logger:newLevel("debug")
 
 return Logger

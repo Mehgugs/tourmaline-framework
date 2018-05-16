@@ -26,6 +26,38 @@ function string:prefix (pre)
     return self:endswith(pre) and self:sub(1,-(#pre+1)) or self
 end
 
+getmetatable"".__mod = function(self, t )
+    if type(t) == 'table' then return self:format(unpack(t))
+    else return self:format(t) end
+end
+
+local codeblock = "```%s```"
+local langblock = "```%s\n%s\n```"
+local bold = "**%s**"
+local emphasis =  "*%s*"
+local strike = "~~%s~~"
+
+
+function string:codeblock()
+    return codeblock:format(self)
+end
+
+function string:lang( lang )
+    return langblock:format(lang, self)
+end
+
+function string:bold(  )
+    return bold:format(self)
+end
+
+function string:emphasis(  )
+    return emphasis:format(self)
+end
+
+function string:strike(  )
+    return strike:format(self)
+end
+
 local matches =
 {
   ["^"] = "%^";
@@ -83,6 +115,19 @@ function util.reduce(f, a, t,...)
 end
 
 
+local nmt = {__new = function(old) return {n = old.n} end}
+local function nthiter(state, i)
+    if i < state.n then return i+1, state[i+1] end
+end
+
+function nmt:__iter()
+    return nthiter, self, 0 
+end
+
+function util.nth_reducer( t )
+    return setmetatable(t, nmt)
+end
+
 local prmt = {__iter = pairs}
 function util.pair_reducer( t )
     return setmetatable(t, prmt)
@@ -100,21 +145,28 @@ end
 
 local mapreduction = function(state, value, index, func, ...) state[index] = func(value, ...); return state end
 function util.map( list, func, ... )
-    local state = {}
+    local meta = getmetatable(list)
+    local state = meta and meta.__new and meta.__new(list) or {}
     return util.reduce(mapreduction, state, list, func, ...)
 end
 
 local filterreduction = function( state, value, index, func) if func(value) then insert(state, value) end return state end
-function util.filter( list, func, state )
+function util.filter( list, func, ... )
     state = state or {}
-    return util.reduce(filterreduction, state, list, func)
+    return util.reduce(filterreduction, state, list, ...)
 end
 
 local filterreduction = function( state, value, index, func) if func(value) then insert(state, {index,value}) end return state end
-function util.filtered_pairs( list, func, state )
+function util.filtered_pairs( list, func, ... )
     state = state or {}
-    return util.reduce(filterreduction, state, list, func)
+    return util.reduce(filterreduction, state, list, func,...)
 end
+
+function util.str( s, default )
+    if s == nil or s == '' then return default else return s end
+end
+
+util.proxy = setmetatable({}, {__index = util, __newindex = function() end, __metatable = false})
 
 
 return util

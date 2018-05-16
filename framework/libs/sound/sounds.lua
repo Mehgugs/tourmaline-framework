@@ -6,7 +6,7 @@ local fs = require"fs"
 local insert,format = table.insert,string.format
 local unpack = table.unpack
 
-local Log = require"oop/loggableObject"
+local Log = require"oop/loggable-object"
 
 local Sox = require "sound/sox"
 

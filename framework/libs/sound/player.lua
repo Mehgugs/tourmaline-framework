@@ -1,4 +1,5 @@
-local Log = require"oop/loggableObject"
+--TODO: unfinished module
+local Log = require"oop/loggable-object"
 local Deqeue = require"oop/deqeue"
 
 local AudioPlayer = Log:extend

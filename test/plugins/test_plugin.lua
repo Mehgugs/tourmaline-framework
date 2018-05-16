@@ -1,8 +1,9 @@
 local tourmaline = require "framework"
+local discordia  = require"discordia"
 local qs = require"querystring"
+local htime = require"uv".hrtime
 local util = tourmaline.util
 local utf8 = tourmaline.syntax.utf8
-
 local insert, concat= table.insert, table.concat
 
 local Test = tourmaline.Command:extend{
@@ -48,7 +49,7 @@ local function help(cmd, msg)
 
     for nonce, command in pairs(Test.__commands) do 
         insert(embed.fields, {
-            name = nonce .. (command.__pipes and ' (>)' or ''),
+            name = nonce .. (command.__pipes and ' (|)' or ''),
             value = command.desc or 'No description :('
         })
     end
@@ -126,18 +127,25 @@ local function where(cmd, msg, object, key, value)
     }
 end
 
-local audioThreads = {};
-local activeConnection = {}
-local skipped = {}
+plugin.audioThreads = plugin.audioThreads or {}
+plugin.activeConnection = plugin.activeConnection or {}
+plugin.skipped = plugin.skipped or {}
+plugin.audioTimeouts = plugin.audioTimeouts or {}
+
+local audioThreads = plugin.audioThreads
+local activeConnection = plugin.activeConnection
+local skipped = plugin.skipped
+local audioTimeouts = plugin.audioTimeouts
+
+
+
+local setTimeout = require"timer".setTimeout
+local cancel = require"timer".clearTimeout
 local function playPlaylist(cmd, msg, url)
-    local query = qs.parse(url:match("%?(.*)") or '')
-    local uri = url:match("^[^?]+")
-    query.v = nil
-    url = uri .. "?" .. qs.stringify(query)
+
     local audioThread = audioThreads[msg.channel.guild.id]
 
     if not audioThread or coroutine.status( audioThread ) == 'dead' then
-        cmd:info(url)
         if audioThread then activeConnection[audioThread] = nil end
         audioThread = coroutine.running(); audioThreads[msg.channel.guild.id] = audioThread
         local ch = msg.client:getChannel("298412191906791426")
@@ -149,9 +157,15 @@ local function playPlaylist(cmd, msg, url)
         msg:reply("Loading Playlist!")
         audio:getffmpegStream()
         msg:reply(("Playing <%s>!"):format(url))
-        while not audio:is_empty() do
+        while true do
+            if audio:is_empty() then 
+                audioTimeouts[audioThread] = setTimeout(10000, resume, audioThread, nil)
+            end
             local player = audio:start(conn.pcmPacketLength)
             assert(player and player.__info, "AudioPlayer failed to return a stream.")
+            if audioTimeouts[audioThread] then 
+                cancel(audioTimeouts[audioThread])
+            end
             conn:playPCM(player)
             player:close()
             if conn.state == "stopped" and not skipped[audioThread] then break end
@@ -194,7 +208,6 @@ local function pipedPlaylist(cmd, msg, effects, url)
     url = uri .. "?" .. qs.stringify(query)
     local audioThread = audioThreads[msg.channel.guild.id]
     if not audioThread or coroutine.status( audioThread ) == 'dead' then
-        cmd:info(url)
         if audioThread then activeConnection[audioThread] = nil end
         audioThread = coroutine.running(); audioThreads[msg.channel.guild.id] = audioThread
         local ch = msg.client:getChannel("298412191906791426")
@@ -265,24 +278,52 @@ local function skipYT(_, msg)
     end
 end
 
+local function reload( _,_, name)
+    local cache = discordia.storage.loaded_plugins
+    if cache[name] then
+        msg:reply('Reloading ...')
+        if assert(tourmaline.plugin.reload(name)) then
+            return "Reloaded %s!" % name
+        end
+    end
+end
+
 local sandbox = {
     send = true,
     content = true,
     id = true,
     mentions = true,
-    author = true
+    author = true,
+    client = true,
+    getChannel = true,
+    getMessage = true,
+    getMessagesAround = true
 }
 
 local mt = {__index = _G}
-
-local function exec( cmd, msg, str, ... )
+local pp = require"pretty-print"
+local dump  =function(val) return pp.strip(pp.dump(val)) end
+local function exec( cmd, msg, codeblock )
+    assert(codeblock.language == "lua", "Cannot run %s" % util.str(codeblock.language, "no language detected?"))
+    assert(codeblock.code and #codeblock.code > 0, "Cannot run empty chunk")
     local env = setmetatable({
-        msg = proxy:new(msg, sandbox),
-        util = tourmaline.util
+        msg = --[[tourmaline.proxy:new(]]msg, --sandbox),
+        util = tourmaline.util.proxy,
+        print = function(...) msg:reply(table.concat(util.map({...}, pp.dump, false, true), "    "):lang"lua") end,
     }, mt)
-    local func = load(str, '🌗', "t", env)
-    jit.off(func)
-
+    local func = assert(load(codeblock.code, '🌗', "t", env))
+    if func then
+        local start = htime()
+        coroutine.wrap(function()
+            local res = table.pack(func())
+            res = util.map(util.nth_reducer(res), pp.dump, false, true)
+            local fin = htime()
+            local elapsed = (fin - start) / 1e6
+            local report = res.n > 0 and table.concat(res, "     ", 1, res.n):lang"lua" or "`Finished with no output!`"
+            msg:reply( "**Took %.3fms**\n%s" % {elapsed, report} )
+        end)()
+        return "Started Computation..."
+    end
 end
 
 local function sox_info(_,msg)
@@ -321,6 +362,17 @@ Test:new{
 Test:new{
     name = "sox_info",
     body = sox_info,
+    desc = "Gets sox debug info."
+}
+
+Test:new{
+    name = "message",
+    body = function(cmd, message) local res = {title = "Mention Test", fields = {}} 
+        for u in message.mentionedUsers:iter() do 
+            insert(res.fields, {name = u.fullname, value = u.id})
+        end
+        return {embed = res}
+    end,
     desc = "Gets sox debug info."
 }
 
@@ -411,4 +463,13 @@ Processor:new{
     name = "b",
     body = rawb,
     desc = "yes."
+}
+
+Provider:new{
+    prefix = "",
+    name = "🌗",
+    body = exec,
+    desc = "Run lua",
+    parser = tourmaline.syntax.codeblock_arg,
+    __middle = false,
 }

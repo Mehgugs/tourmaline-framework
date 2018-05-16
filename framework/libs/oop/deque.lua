@@ -8,6 +8,7 @@ return require"oop/oo".Object
         self._last = -1
     end,
     is_empty = function(self) return self._first == 0 and self._last == -1 end,
+    count = function(self) return self._last + 1 - self._first end,
     pushleft = function(self, v)
         local first = self._first - 1
         self._first = first
@@ -34,6 +35,22 @@ return require"oop/oo".Object
         self._last = last - 1
         return value
     end,
+    __deque_iter_left = function(state, i) 
+        if i < state._last then 
+            return i+1, state._queue[i+1]
+        end
+    end,
+    __deque_iter_right = function(state, i) 
+        if i > state._first then 
+            return i-1, state._queue[i-1]
+        end
+    end,
+    fromleft = function(self) return self.__deque_iter_left, self, self._first-1 end,
+    fromright = function(self) return self.__deque_iter_right, self, self._last+1 end,
+    __consume_left = function(state) return state:popleft() end, 
+    __consume_right = function(state) return state:popright() end,  
+    drainleft = function(self) return self.__consume_left, self end,
+    drainright = function(self) return self.__consume_right, self end,
     first = function (self) return self._queue[self._first] end,
     last = function (self) return self._queue[self._last] end  
 }

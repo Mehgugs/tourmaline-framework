@@ -6,7 +6,8 @@ local function maybe(p) return p^-1 end
 
 local syntax = {}
 local any = P(1)
-local space = l.space^0
+local space = (S' \t')^0
+local fullspace = l.space^0
 local escapedQuote = P'\\"'
 local quote = P'"'
 local non_quote = escapedQuote + (1 - quote) 
@@ -14,13 +15,15 @@ local word = 1 - (quote + escapedQuote + l.space)
 
 local quoted = (quote * C(non_quote^1) * quote) + C(word^1)
 
-local qstring = (space * quoted * space)^0
+local qstring = (fullspace * quoted * fullspace)^0
 syntax.qstring = Ct(qstring)
 
 
 local pipe_literal = P"|"
-local pipe_item = (quote * C((non_quote)^1) * quote) + C((1 - (quote + escapedQuote + l.space + pipe_literal))^1)
-local pipe_args = Ct((space * pipe_item * space)^0)
+local escaped_pipe = P"\\|"
+local pipe_arg = escaped_pipe + (1 - pipe_literal)
+local pipe_item = Cg(C((escaped_pipe + (1 - (pipe_literal + l.space))  )^1), "func") * fullspace * Cg(C(pipe_arg^0), "pipe_args")
+local pipe_args = (fullspace * Ct(pipe_item) * fullspace)^0
 local pipe_expr = Ct(pipe_args * (pipe_literal * pipe_args)^1)
 
 syntax.pipe = pipe_expr
@@ -28,18 +31,14 @@ syntax.pipe = pipe_expr
 
 local nonce = Cg((1 - l.space)^1, "command")
 
-local command_string = Ct(nonce * space * Cg(syntax.qstring, "args"))
+local command_string = Ct(nonce * fullspace * Cg(C(any^0), "args"))
 
 
 
 syntax.command_string = command_string
 
-local function fix_pipe_expr(pipe)
 
-    return pipe,pipe[1]
-end
-
-local command_pipe = Ct(nonce * space * Cg(pipe_expr, "pipe"))
+local command_pipe = Ct(nonce * fullspace * Cg(C(pipe_arg^0), "args") * Cg(pipe_expr, "pipe"))
 
 syntax.command_pipe = command_pipe
 
@@ -67,7 +66,7 @@ local lisp_parser = P { --taken from https://gist.github.com/polymeris/857a7ae31
         list    = P'\'(' * Ct(V'expr' ^ 1) * P')',
         array   = P'[' * Ct(V'expr' ^ 1) * P']',
     expr      = V'wspace' * (V'coll' + V'atom' + V'sexpr'),
-    sexpr     = V'wspace' * P'(' * (V'symbol' + V'sexpr') * Ct(V'expr' ^ 0) * P')' / function(f, args) return f(args) end
+    sexpr     = V'wspace' * P'(' * (V'symbol' + V'sexpr') * Ct(V'expr' ^ 0) * P')' / function(f, args) return f and f(args) end
 }
 
 local def = function(n, f) lisp_environment[n] = f end
@@ -113,5 +112,13 @@ syntax.lisp = {
 }
 syntax.utf8 = require"syntax/utf8"
 syntax.re = require"syntax/re"
+
+local code_mark = P"```"
+local lang = Cg((1-l.space)^0, "language")
+local code = Cg((1- code_mark)^0, "code")
+
+syntax.codeblock = code_mark * Ct(lang * code) * code_mark
+syntax.codeblock_arg = Ct(syntax.codeblock)
+
 
 return syntax

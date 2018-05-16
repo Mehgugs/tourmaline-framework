@@ -16,8 +16,6 @@ local PlaylistSource = AudioSource:extend
 {
     __info = "tourmaline/playlisted-audio-source",
     __stream_config = {
-        '-f',
-        'mpeg/bestaudio/best',
         '-g'
     }
 }:mix(Deque)
@@ -76,6 +74,15 @@ function PlaylistSource:pull()
     if data then self:info("Pulled item off queue") return data end
 end
 
+function PlaylistSource:queued_items()
+    return self:count()
+end
+
+function PlaylistSource:waitForItem(  )
+    self._waiting = running()
+    return yield()
+end
+
 function PlaylistSource:start( blocksize ,samplerate, channels  )
 
     if self._started == nil then self:getffmpegStream() end
@@ -83,8 +90,7 @@ function PlaylistSource:start( blocksize ,samplerate, channels  )
     if stream then 
         return Sox:new(stream,samplerate or 48000, channels or 2, blocksize, self._effects)
     elseif self._cache and not stream then
-        self._waiting = running()
-        yield()
+        self:waitForItem()
         return self:start(blocksize ,samplerate, channels)
     else
         self:error("Could not resolve this url with youtube-dl: %s", self._url)

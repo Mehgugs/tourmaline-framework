@@ -40,6 +40,9 @@ end
 function Plugin:onUnload(f) self.unloads = f end
 
 function Plugin:unload(  )
+    if self.unloads then 
+        self:unloads()
+    end
     for name, fn in pairs(self.events) do 
         self.__client:removeListener(name, fn)
     end
@@ -168,7 +171,7 @@ local function reload(name)
         return true,plg
     else
         Logger:log(1,"Failed to reload plugin:%s@%s",plugin._name, plugin._file)
-        return false
+        return false, plg
     end
 end
 

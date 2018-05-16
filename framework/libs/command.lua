@@ -5,14 +5,14 @@ local discordia = require"discordia"
 
 local insert, remove, unpack = table.insert, table.remove, table.unpack
 
-local Log = require"oop/loggableObject"
+local Log = require"oop/loggable-object"
 
 Command = Log:extend
 {
     __info = "tourmaline/command",
     __commands = {},
     __aliases = {},
-    __unpackFunc = function(self, msg, args) return self:_body(msg, unpack(args)) end
+    parser = syntax.qstring,
 }
 
 function Command:extend( options )
@@ -48,40 +48,40 @@ end
 
 
 function Command:__call( msg, cinfo)
-    local args, wasPipe =  cinfo.pipe or cinfo.args, not not cinfo.pipe
+    if not self._userId then self._userId = msg.client.user.id end
+    local args, wasPipe =  cinfo.args, not not cinfo.pipe
     if wasPipe and self.__pipes then 
-        local initialArgs = remove(args, 1)
-        
-        local succ,acc = self:execute_pipe(msg, initialArgs)
-        if succ and self.__middle and #args == 0 then succ = false acc = "Unfinished pipe expression!" end
+        local initialArgs = self.parser:match(args)
+        local succ,acc = self:execute_pipe(msg, initialArgs[1], initialArgs, 2)
+        if succ and self.__middle and #cinfo.pipe == 0 then succ = false acc = "Unfinished pipe expression!" end
         if not succ then 
             return self:replyWithErr(msg, acc)
         else
-            for i, cmdexpr in ipairs(args) do 
-                local command = Command.resolveName(cmdexpr[1]) or Command.resolveName(self.prefix .. cmdexpr[1])
+            for i, cmdexpr in ipairs(cinfo.pipe) do 
+                local command = Command.resolveName(cmdexpr.func) or Command.resolveName(self.prefix .. cmdexpr.func)
                 if command and command.__pipes then 
                     local success; 
-                    if command.__middle and i == #args then 
+                    if command.__middle and i == #cinfo.pipe then 
                         success = false 
                         acc = "Unfinished `pipe_expr`!" 
                     else
-                        success, acc = command:execute_pipe(msg, {acc, unpack(cmdexpr, 2)}) 
+                        success, acc = command:execute_pipe(msg, acc,cmdexpr.pipe_args) 
                     end
                     if not success then return command:replyWithErr(msg, acc) end
                 end
             end
             if acc then msg:reply(acc) end
         end
-    elseif not wasPipe and not self.__pipeonly and not self.__middle then return self:execute(msg, args, false)
+    elseif not wasPipe and not self.__pipeonly and not self.__middle then return self:execute(msg, args)
     else
         return self:replyWithErr(msg, "Expected `pipe_expr`!")
     end
 end
 
 function Command:execute(msg, args)
-    if not self._userId then self._userId = msg.client.user.id end
+    args = self.parser:match(args)
     local executed = false;
-    if self:valid(msg) then
+    if self:valid(msg) and args then
         local success, ret = pcall(self.body,self,msg,unpack(args))
         executed = success
         if not success then 
@@ -105,11 +105,11 @@ function Command:replyWithErr( msg, err )
     }
 end
 
-function Command:execute_pipe(msg, args)
-    if not self._userId then self._userId = msg.client.user.id end
-    if self:valid(msg) then
+function Command:execute_pipe(msg, acc, args, from)
+    args = type(args) == 'string' and self.parser:match(args) or args
+    if self:valid(msg) and args then
         local body = self.__pipe_body or self.body 
-        local success, ret = pcall(body,self,msg,unpack(args))
+        local success, ret = pcall(body,self,msg,acc,unpack(args, from or 1))
         if not success and self.__verbose then self:error(ret) end
         return success, ret
     end

@@ -7,11 +7,21 @@ local insert, remove, unpack = table.insert, table.remove, table.unpack
 
 local Log = require"oop/loggable-object"
 
+local command_types = {
+     basic = true -- a command with no pipe expression
+    ,producer= true  -- a command which must be in position one of a pipe
+    ,transformer = true -- a command whose position can be > 1 and < n
+    ,output = true -- a command which must be in position n of a pipe
+    ,pipe = true -- a command which must be in a pipe expression
+    ,any = true -- basic + pipe
+}
+
 Command = Log:extend
 {
     __info = "tourmaline/command",
     __commands = {},
     __aliases = {},
+    type = "basic",
     parser = syntax.qstring,
 }
 
@@ -44,8 +54,12 @@ function Command:initial( options )
     self:info(
         "command created."
     )
+    if not command_types[self.type] then
+        local old = self.type 
+        self.type = "basic" 
+        self:warn("Unknown command type '%s'", old)
+    end
 end
-
 
 function Command:__call( msg, cinfo)
     if not self._userId then self._userId = msg.client.user.id end

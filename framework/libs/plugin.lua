@@ -9,10 +9,11 @@ local fs = require"fs"
 local pathj = require"pathjoin".pathJoin
 local dump = require"pretty-print".dump
 local reqgen = require"require"
+local decode = require"json".decode
 local scandir = fs.scandirSync
 
 local insert = table.insert
-
+local unpack = table.unpack
 local Logger = discordia.Logger(3, "!%F %T")
                discordia.extensions.string()
 
@@ -20,7 +21,8 @@ local Plugin = oop.Object:extend{
     __info = "tourmaline/plugin",
     __plugins =  {},
     __root = "plugins",
-    __reqcache = {}
+    __reqcache = {},
+    __default_config_loc = ".config"
 }
 
 
@@ -28,24 +30,86 @@ function Plugin:initial( options )
     self._file = options.file
     self._folder = options.folder
     self._name = options.name
-    self.require = newrequire
+    self.require = options.require
+    self.module = options.luvit_module
     self.__plugins[options.file] = self
-    self.events = {}
+    self._events = {}
+    self._sources = {}
+    self._unloadable_sources = {}
 end
 
 function Plugin:path( ... )
     return pathj(cwd(), self._folder, ...)
 end
 
-function Plugin:onUnload(f) self.unloads = f end
 
 function Plugin:unload(  )
-    if self.unloads then 
-        self:unloads()
+    if self.onUnload then 
+        pcall(self.onUnload, self)
     end
-    for name, fn in pairs(self.events) do 
-        self.__client:removeListener(name, fn)
+    for name, fns in pairs(self._events) do 
+        for _, fn in ipairs(fns) do 
+            self.__client:removeListener(name, fn)
+        end
     end
+    self._events = {}
+    for source in pairs(self._unloadable_sources) do 
+        self._sources[source] = nil
+    end
+end
+local HadError = {}
+function Plugin:_source(path)
+    local fs = self:path(path)
+    if not fs:endswith(".lua") then fs= fs .. ".lua" end
+    local res = assert(loadfile(fs))
+    local _env = getfenv(res)
+    _env.require = self.require
+    _env.plugin = self
+    setfenv(res,_env)
+    local ret = {pcall(res)}
+    local success = table.remove(ret, 1)
+    if success then 
+        self._sources[path] = ret
+        return unpack(ret)
+    else
+        Logger:log(1, "plugin:%s had error loading source from '%s': %s",self._name,path, ret[1])
+        self._sources[path] = HadError
+        return nil
+    end
+end
+
+function Plugin:source(path, u) 
+    if u then self:refreshSource(path, true) end
+    if self._sources[path] and self._sources[path] ~= HadError then 
+        return unpack(self._sources[path])
+    elseif self._sources[path] == nil then
+        return self:_source(path)
+    end
+end
+
+function Plugin:unloadableSource(path)
+    return self:source(path, true)
+end
+
+function Plugin:refreshSource(path, supress)
+    self._unloadable_sources[path] = true
+    if not self._sources[path] and not supress then 
+        Logger:log(2, "plugin:%s has not loaded source '%s' yet, (required files cannot be unloaded this way.)", self._name, path)
+    end
+end
+
+function Plugin:_fileconfig(path)
+    path = path or Plugin.__default_config_loc
+    local file = self:path(path)
+    return assert(decode(assert(fs.readFileSync(path))))
+end
+
+function Plugin:_storedconfig()
+    return discordia.storage.config[self._name]
+end
+
+function Plugin:config(path)
+    return self:_storedconfig() or self:_fileconfig(path)
 end
 
 Plugin:static"setClient"
@@ -54,46 +118,53 @@ function Plugin.setClient( c )
 end
 
 function Plugin:on( name, fn )
-    self.events[name] = fn 
+    if not self._events[name] then self._events[name] = {} end
+    insert(self._events[name], fn)
     return self.__client:on(name, fn)
 end
 
 function Plugin:once( name, fn )
-    self.events[name] = fn 
+    if not self._events[name] then self._events[name] = {} end
+    insert(self._events[name], fn) 
     return self.__client:once(name, fn)
 end
 
-local function readPlugin(files, plugins, file)
-    local path = pathj(cwd(), file)
+local function readPlugin(files, plugins, loc, name)
+    local path = pathj(loc, "init.lua")
     insert(files, path) 
-    local name = file:match("([^/\\]*)%.lua$")
     plugins.names[name] = path
     plugins.files[path] = name
 end
 
-local function readAll(location, files, plugins)
-
-    location = location or Plugin.__root
-    local root = pathj(cwd(),location)
-    for file, type in scandir(root) do
-        local at = location..'/'..file
-        if type == 'directory' then
-            readAll(at, files, plugins)
-        elseif type == 'file' and file:endswith".lua" then
-            readPlugin(files, plugins, at)
+local function readPluginFromDirectory(location, files, plugins, name)
+    for file, type in scandir(location) do
+        if type == 'file' and file == 'init.lua' then 
+            readPlugin(files, plugins, location, name)
         end
     end
 end
 
-local function loadPlugin(filepath)
-    local folder = filepath:match("^.+[\\/]")
-    local name = filepath:match("([^/\\]*)%.lua$")
-    local logname = ("plugin:%s"):format(name)
+local function readAll(location, files, plugins)
+    local root = pathj(cwd(),location or Plugin.__root)
+    for file, type in scandir(root) do
+        local at = ("%s/%s"):format(root, file)
+        if type == 'directory' then
+            readPluginFromDirectory(at, files, plugins, file)
+        end
+    end
+end
 
+
+
+local function loadPlugin(name, filepath)
+    local folder = filepath:match("^.+[\\/]")
+    local logname = ("plugin:%s"):format(name)
+    local luvit_module;
     --create a require function localized to the plugin's dir
     if not Plugin.__reqcache[filepath] then 
         local r,m = reqgen(filepath)
         Plugin.__reqcache[filepath] = r
+        luvit_module = m
     end
     local newrequire = Plugin.__reqcache[filepath]
 
@@ -104,7 +175,8 @@ local function loadPlugin(filepath)
             file = filepath,
             folder = folder,
             name = name,
-            require = newrequire
+            require = newrequire,
+            luvit_module = luvit_module
         }
     end
 
@@ -141,7 +213,7 @@ local function loadPlugins(  )
             Logger:log(1, "Could not parse %s skipping.", file)
             goto skip
         end
-        local loaded, module = loadPlugin(file)
+        local loaded, module = loadPlugin(plugins.files[file], file)
         if loaded then 
             local name = plugins.files[file]
             loaded_plugins[name] = Plugin.__plugins[file]
@@ -161,12 +233,12 @@ local function reload(name)
     end
     local plugin = discordia.storage.loaded_plugins[name]
     plugin:unload()
-    local loaded, plg = loadPlugin(plugin._file)
+    local loaded, plg = loadPlugin(name, plugin._file)
     plugin._state = loaded
     if loaded then
         Logger:log(3,"Reloaded plugin:%s@%s",plugin._name, plugin._file)
         if plugin.onReload then
-            pcall(plugin.onReload,plugin,msg)
+            pcall(plugin.onReload,plugin)
         end
         return true,plg
     else

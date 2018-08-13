@@ -1,7 +1,6 @@
 local util = require"util"
 local oop = require"oop/oo"
 local discordia = require"discordia"
-local meta = require"meta"
 local Logger = require"oop/loggable-object"
 local cwd = process.cwd
 

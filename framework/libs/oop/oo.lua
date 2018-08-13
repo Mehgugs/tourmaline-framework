@@ -24,6 +24,7 @@ local function newObject (t)
   t = t or {}
   t.__newindex = newindexer(t)
   t.__index = indexer(t)
+  t.__class = t
   static[t] = {}
   return t
 end

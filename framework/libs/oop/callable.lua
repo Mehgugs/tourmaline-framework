@@ -1,5 +1,7 @@
 local create = function(cls,...) return cls:new(...) end
-return require"oop/oo".Object:extend {
+local oo = require"oop/oo"
+local newObject = oo.new
+return oo.Object:extend {
     extend = function(base, t)
         local sub = t or {}
         sub.__base = base

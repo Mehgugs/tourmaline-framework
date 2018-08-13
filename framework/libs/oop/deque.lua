@@ -1,4 +1,4 @@
-return require"oop/oo".Object
+local deque = require"oop/oo".Object
 :extend
 {
     __info = "tourmaline/deque",
@@ -35,6 +35,12 @@ return require"oop/oo".Object
         self._last = last - 1
         return value
     end,
+    peekleft = function(self) 
+        return self._queue[self._first]
+    end,
+    peekright = function(self) 
+        return self._queue[self._last]
+    end,
     __deque_iter_left = function(state, i) 
         if i < state._last then 
             return i+1, state._queue[i+1]
@@ -52,5 +58,40 @@ return require"oop/oo".Object
     drainleft = function(self) return self.__consume_left, self end,
     drainright = function(self) return self.__consume_right, self end,
     first = function (self) return self._queue[self._first] end,
-    last = function (self) return self._queue[self._last] end  
+    last = function (self) return self._queue[self._last] end,
+    filterleft = function(self, pred)
+        local new = deque:new()
+        for _, item in self:fromleft() do 
+            
+            if pred(item) then 
+                new:pushleft(item)
+            end 
+        end
+        return new
+    end,
+    filterright = function(self, pred)
+        local new = deque:new()
+        for _, item in self:fromright() do 
+            
+            if pred(item) then 
+                new:pushright(item)
+            end 
+        end
+        return new
+    end,
+    findleft = function(self, pred)
+        for _, item in self:fromleft() do 
+            if pred(item) then 
+                return item
+            end 
+        end
+    end,
+    findright = function(self, pred)
+        for _, item in self:fromright() do 
+            if pred(item) then 
+                return item
+            end 
+        end
+    end,
 }
+return deque

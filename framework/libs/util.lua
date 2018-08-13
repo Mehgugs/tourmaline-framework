@@ -36,27 +36,52 @@ local langblock = "```%s\n%s\n```"
 local bold = "**%s**"
 local emphasis =  "*%s*"
 local strike = "~~%s~~"
+local snippet = "`%s`"
+
+local lpeg = require"lpeg"
+lpeg.locale(lpeg)
+
+local modifiers = lpeg.S"`*_~:<>"
+
+function lpeg.gsub (s, patt, repl)
+    patt = lpeg.P(patt)
+    patt = lpeg.Cs((patt / repl + 1)^0)
+    return lpeg.match(patt, s)
+end
+
+--cleans a string so that it's discord safe
+function string.sanitize(str) 
+    return lpeg.gsub(str, modifiers, "\\%0")
+end
+
+function string.strip(str) return str:gsub("%^.-;", "") end
 
 
 function string:codeblock()
-    return codeblock:format(self)
+    return codeblock:format(self:sanitize())
 end
 
 function string:lang( lang )
-    return langblock:format(lang, self)
+    return langblock:format(lang, self:sanitize())
 end
 
 function string:bold(  )
-    return bold:format(self)
+    return bold:format(self:sanitize())
 end
 
 function string:emphasis(  )
-    return emphasis:format(self)
+    return emphasis:format(self:sanitize())
 end
 
 function string:strike(  )
-    return strike:format(self)
+    return strike:format(self:sanitize())
 end
+
+function string:snippet()
+    return snippet:format(self:sanitize())
+end
+
+function string:trim() return self:gsub("^%s*(.-)%s*$","%1",1) end
 
 local matches =
 {
@@ -79,6 +104,15 @@ function string:escape_lua_pattern(s)
 end
 
 local util = {}
+local insert = table.insert 
+local running, resume, yield, wrap, status = coroutine.running, coroutine.resume, coroutine.yield, coroutine.wrap, coroutine.status 
+local sleep = require"timer".sleep
+
+function util.keys(t) 
+    local new = {}
+    for k in pairs(t) do insert(new, k) end 
+    return new
+end
 
 function util.merge(t1, t2)
     for k, v in pairs(t2) do
@@ -105,34 +139,35 @@ function util.foldWithArgs( l, f, a,...)
     return a
 end
 
+function util.fold(l, f, a)
+    for k,v in ipairs(l) do 
+        a = f(a,v)
+    end
+    return a
+end
+
+function util.filterout(t, elem)
+    local new = {}
+    for _, v in ipairs(r) do 
+        if v ~= elem then 
+            insert(new, v)
+        end
+    end
+    return new
+end
+
 function util.reduce(f, a, t,...)
-    local meta = getmetatable(t)
-    local iterate = meta and meta.__iter or ipairs
-    for k, v in iterate(t) do
+    for k, v in ipairs(t) do
         a = f(a,v,k,...)
     end
     return a
 end
 
-
-local nmt = {__new = function(old) return {n = old.n} end}
-local function nthiter(state, i)
-    if i < state.n then return i+1, state[i+1] end
+function util.contains(t, elem)
+    for k, v in pairs(t) do 
+        if v == elem then return true end
+    end
 end
-
-function nmt:__iter()
-    return nthiter, self, 0 
-end
-
-function util.nth_reducer( t )
-    return setmetatable(t, nmt)
-end
-
-local prmt = {__iter = pairs}
-function util.pair_reducer( t )
-    return setmetatable(t, prmt)
-end
-
 
 local function compose2(f,fnext)
     return function(...) return fnext(f(...)) end
@@ -143,30 +178,88 @@ function util.compose( ... )
     return util.reduce(compose2, (...),funcs)
 end
 
-local mapreduction = function(state, value, index, func, ...) state[index] = func(value, ...); return state end
-function util.map( list, func, ... )
-    local meta = getmetatable(list)
-    local state = meta and meta.__new and meta.__new(list) or {}
-    return util.reduce(mapreduction, state, list, func, ...)
+function util.map( list, func)
+    local new = {}
+    for k, v in ipairs(list) do 
+        new[k] = func(v, k)
+    end
+    return new
 end
 
-local filterreduction = function( state, value, index, func) if func(value) then insert(state, value) end return state end
 function util.filter( list, func, ... )
-    state = state or {}
-    return util.reduce(filterreduction, state, list, ...)
+    local new = {}
+    for k, v in ipairs(list) do 
+        if func(v, k) then insert(new, v) end
+    end
+    return new
 end
 
-local filterreduction = function( state, value, index, func) if func(value) then insert(state, {index,value}) end return state end
-function util.filtered_pairs( list, func, ... )
-    state = state or {}
-    return util.reduce(filterreduction, state, list, func,...)
-end
 
 function util.str( s, default )
     if s == nil or s == '' then return default else return s end
 end
 
 util.proxy = setmetatable({}, {__index = util, __newindex = function() end, __metatable = false})
+
+local function _disjuct(A,B) return function(cmd, msg) return A(cmd, msg) or B(cmd, msg) end end
+
+function util.disjunct(...) 
+    local f = _disjuct(...)
+    for _, nxt in ipairs{select(3,...)} do 
+        f = _disjuct(f, nxt)
+    end
+    return f
+end
+function util.negate(A) return function(cmd, msg) return not A(cmd, msg) end end
+
+function util.guild_only(_, msg) return not not msg.guild end
+
+function util.has_required_roles(cmd, msg, scope)
+    scope = scope or cmd.scope or "moderation"
+    local roles = cmd.plugin:config().roles 
+    local member = msg.member
+    if not roles[scope] then return false end 
+    for _, id in ipairs(roles[scope]) do 
+        if not member:hasRole(id) then return false end 
+    end
+    return true
+end
+
+function util.in_correct_channel(cmd, msg, scope)
+    scope = scope or cmd.scope or "moderation"
+    local channels = cmd.plugin:config().channels[scope]
+    local id = msg.channel.id
+    return channels and util.contains(channels, id)
+end
+
+function util.has_a_required_role(cmd, msg, scope)
+    scope = scope or cmd.scope or "moderation"
+    local roles = cmd.plugin:config().roles[scope]
+    local member = msg.member
+    if not roles then return false end
+    for _, id in ipairs(roles) do 
+        if  member:hasRole(id) then return true end 
+    end
+    return false
+end
+
+function util.has_admin(cmd, msg)
+    return util.has_a_required_role(cmd, msg, "admin") or msg.member and msg.member:hasPermission(msg.channel, 0x8)
+end
+
+function util.in_guild(gid)
+    return function(_, msg) return msg.guild and msg.guild.id == gid end 
+end
+
+function util.makeCallback()
+    local thread = running() 
+    return wrap(function(...) while status(thread) ~= "suspended" do sleep(0) end return assert(resume(thread, ...)) end)
+end
+
+local weak_meta = {__mode = "k"}
+function util.weak(t)
+    return setmetatable(t, weak_meta)
+end
 
 
 return util

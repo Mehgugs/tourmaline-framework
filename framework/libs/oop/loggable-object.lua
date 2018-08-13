@@ -63,4 +63,9 @@ Logger:newLevel("warn")
 Logger:newLevel("error")
 Logger:newLevel("debug")
 
+function Logger:fatal(...)
+    self:error(...)
+    return error()
+end
+
 return Logger

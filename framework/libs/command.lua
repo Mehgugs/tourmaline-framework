@@ -115,7 +115,9 @@ function Command:replyWithErr( msg, err )
     local payload, dm = nil, self.__dmerr
     if type(err) == 'table' then 
         payload = err.response
-        dm = err.dm or self.__dmerr 
+        if err.dm ~= nil then 
+            dm = err.dm 
+        end
     else 
         payload = self:runtimeError(err)
     end

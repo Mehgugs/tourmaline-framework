@@ -225,6 +225,8 @@ function Plugin:unload( force )
         end
         self.loaded = false
         self:emit('unloaded', self)
+        self._listeners = {}
+        self:info('Unloaded')
     end
 end
 

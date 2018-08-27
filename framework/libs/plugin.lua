@@ -114,6 +114,7 @@ function Plugin:_source(path)
 end
 
 function Plugin:source(path, u) 
+    if u == nil then u = true end
     if u then self:refreshSource(path, true) end
     if self._sources[path] and self._sources[path] ~= HadError then 
         return unpack(self._sources[path])
@@ -238,14 +239,14 @@ function Plugin:reload()
         self:emit('reloaded', self)
         return true, returns
     else
-        plugin:error("Failed to reload @%s", self._file)
+        self:error("Failed to reload @%s", self._file)
         return false, nil
     end
 end
 
 
 
-Plugin:static"loadNew"
+Plugin:static"readNew"
 function Plugin.readNew(name, location)
     local root = pathj(cwd(),location or Plugin.__root)
     local at = ("%s/%s"):format(root, name)

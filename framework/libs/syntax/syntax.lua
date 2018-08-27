@@ -39,16 +39,34 @@ local mention_patt = open * (
 	mention_types.channel
 ) * close
 
-local escapedQuote = P'\\"'
 local quote = P'"'
+local escapedQuote = P'\\"'/'"'
 local non_quote = escapedQuote + (1 - quote) 
 local word = 1 - (quote + escapedQuote + l.space) 
 
-local quoted = mention_patt + (quote * C(non_quote^1) * quote) + C(word^1)
+local quoted = mention_patt + (quote * Cs(non_quote^1) * quote) + C(word^1)
 
 local qstring = (fullspace * quoted * fullspace)^0
 syntax.qstring = #any*qstring
 
+function syntax.enclosed_qstring(start, stop, predicated)
+    local escaped_start, escaped_stop = P("\\"..start)/start,P("\\"..stop)/stop
+    
+    local aug_quote = quote + start + stop
+    local aug_escaped = escapedQuote + escaped_start + escaped_stop
+    local aug_nonQuote = aug_escaped + (1 - aug_quote)
+
+    local aug_word = 1 - (aug_quote + aug_escaped + l.space)
+
+    local aug_quoted = mention_patt + (quote * Cs(aug_nonQuote^1) * quote) + C(aug_word^1)
+
+    local aug_qstring = (fullspace * aug_quoted * fullspace)^0
+    if predicated then
+        return start * (#(P(1)-stop)*aug_qstring) * stop
+    else
+        return start * aug_qstring * stop
+    end
+end
 
 local nonce = Cg((1 - l.space)^1, "command")
 
@@ -245,5 +263,7 @@ function syntax.some(pattern)
     pattern = C(pattern)
     return Ct(pattern^1)
 end
+
+syntax.mention = mention_patt
 
 return syntax

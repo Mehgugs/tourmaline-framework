@@ -178,10 +178,10 @@ function util.compose( ... )
     return util.reduce(compose2, (...),funcs)
 end
 
-function util.map( list, func)
+function util.map( list, func, ...)
     local new = {}
     for k, v in ipairs(list) do 
-        new[k] = func(v, k)
+        new[k] = func(v, ...)
     end
     return new
 end
@@ -189,7 +189,7 @@ end
 function util.filter( list, func, ... )
     local new = {}
     for k, v in ipairs(list) do 
-        if func(v, k) then insert(new, v) end
+        if func(v, ...) then insert(new, v) end
     end
     return new
 end

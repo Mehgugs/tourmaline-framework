@@ -240,7 +240,7 @@ function Plugin:reload()
         return true, returns
     else
         self:error("Failed to reload @%s", self._file)
-        return false, nil
+        return false, returns
     end
 end
 

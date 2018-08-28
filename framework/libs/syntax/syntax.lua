@@ -18,16 +18,16 @@ local fullspace = l.space^0
 
 local open = P"<" -- create the generic pattern objects
 local close = P">"
-local cid = l.digit^1
+local cid = Cg(l.digit^1, "id")
 local emoji_name = (("_" + l.alnum)  - ":")^1
 
 local mention_types = {
-	emoji = ":" * emoji_name * ":" * cid , 
-	animoji = "a:" * emoji_name * ":" * cid ,
-	user = "@" * cid,
-	nick = "@!" * cid,
-	role = "@&" * cid ,
-	channel = "#" * cid ,
+	emoji =  ":" * emoji_name * ":" * cid * Cg(Cc("emoji"), "type") , 
+	animoji = "a:" * emoji_name * ":" * cid * Cg(Cc("animoji"), "type") ,
+	user = "@" * cid * Cg(Cc("user"), "type"),
+	nick = "@!" * cid * Cg(Cc("nick"), "type"),
+	role = "@&" * cid * Cg(Cc("role"), "type"),
+	channel = "#" * cid * Cg(Cc("channel"), "type"),
 }
 
 local mention_patt = open * (
@@ -264,6 +264,8 @@ function syntax.some(pattern)
     return Ct(pattern^1)
 end
 
-syntax.mention = mention_patt
+syntax.mention = C(mention_patt)
+
+syntax.mentions = Ct(Ct(mention_patt)^1)
 
 return syntax

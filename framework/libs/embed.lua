@@ -201,7 +201,24 @@ end
 
 Embed:prop"image"
 function Embed:image( url_or_img )
-    return type(url_or_img) == 'string' and self:_image{url = url_or_img} or self:image(url_or_img)
+    return type(url_or_img) == 'string' and self:_image{url = url_or_img} or self:_image(url_or_img)
+end
+
+function Embed:_thumbnail(i)
+    etype('table', i)
+    local url = i.url
+    local parsed = syntax.parse_url(url)
+    local scm = parsed.scheme
+    if eassert(Embed.__schemes.image[scm], "Input was not a valid url: %q", url) then 
+        self._embed.thumbnail = {url = url}
+    end
+    
+    return self
+end
+
+Embed:prop"thumbnail"
+function Embed:thumbnail( url_or_img )
+    return type(url_or_img) == 'string' and self:_thumbnail{url = url_or_img} or self:_thumbnail(url_or_img)
 end
 
 Embed:prop"author"

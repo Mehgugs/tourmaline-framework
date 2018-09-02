@@ -21,9 +21,9 @@ local mmeta = {}
 local function init(self, pre)
     local discordia = require"discordia"
     local client = discordia.Client()
+    local token = pre(client)
     self.plugin.setClient(client)
     self.plugin.loadPlugins()
-    local token = pre(client)
     return client:run(token)
 end
 

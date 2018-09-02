@@ -22,8 +22,8 @@ local cid = Cg(l.digit^1, "id")
 local emoji_name = (("_" + l.alnum)  - ":")^1
 
 local mention_types = {
-	emoji =  ":" * emoji_name * ":" * cid * Cg(Cc("emoji"), "type") , 
-	animoji = "a:" * emoji_name * ":" * cid * Cg(Cc("animoji"), "type") ,
+	emoji =  ":" * Cg(emoji_name, "name") * ":" * cid * Cg(Cc("emoji"), "type") , 
+	animoji = "a:" * Cg(emoji_name, "name") * ":" * cid * Cg(Cc("animoji"), "type") ,
 	user = "@" * cid * Cg(Cc("user"), "type"),
 	nick = "@!" * cid * Cg(Cc("nick"), "type"),
 	role = "@&" * cid * Cg(Cc("role"), "type"),
@@ -39,6 +39,10 @@ local mention_patt = open * (
 	mention_types.channel
 ) * close
 
+for type, pattern in pairs(mention_types) do 
+    syntax[type .. "_mention"] = Ct(open *pattern* close)
+end
+
 local quote = P'"'
 local escapedQuote = P'\\"'/'"'
 local non_quote = escapedQuote + (1 - quote) 
@@ -47,7 +51,7 @@ local word = 1 - (quote + escapedQuote + l.space)
 local quoted = mention_patt + (quote * Cs(non_quote^1) * quote) + C(word^1)
 
 local qstring = (fullspace * quoted * fullspace)^0
-syntax.qstring = #any*qstring
+syntax.qstring = #(1-mention_patt)*qstring
 
 function syntax.enclosed_qstring(start, stop, predicated)
     local escaped_start, escaped_stop = P("\\"..start)/start,P("\\"..stop)/stop
@@ -260,8 +264,11 @@ syntax.parse_url = hashed
 syntax.url = #any * parser / process
 
 function syntax.some(pattern)
-    pattern = C(pattern)
     return Ct(pattern^1)
+end
+
+function syntax.anywhere(pattern)
+    return P{ pattern + 1 * lpeg.V(1) }
 end
 
 syntax.mention = C(mention_patt)

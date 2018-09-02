@@ -149,8 +149,7 @@ function Command:raiseArgError()
             }
             ,color = error_red
             ,timestamp = os.date"!%FT%T"
-        },
-        dm = true
+        }
     }
 end
 
@@ -253,12 +252,12 @@ function Command.command_help(cmd, msg, query)
                 title = ("Command Information for %s"):format(ncmd.nonce),
                 fields = {
                     {name = "Description", value = ncmd.desc},
-                    {name = "Usage", value = ncmd.UsageString:sanitize():snippet()},
+                    {name = "Usage", value = ncmd.UsageString:snippet()},
                     
                 },
                 textfooter = ncmd.plugin and ncmd.plugin:name()
             }
-            if cmd.aliases then 
+            if ncmd.aliases then 
                 embed:field{name = "Aliases", value = table.concat(ncmd.aliases, ", "):sanitize():bold()}
             end
             return {embed = #embed}

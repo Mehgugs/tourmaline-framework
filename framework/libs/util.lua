@@ -58,11 +58,11 @@ function string.strip(str) return str:gsub("%^.-;", "") end
 
 
 function string:codeblock()
-    return codeblock:format(self:sanitize())
+    return codeblock:format(self)
 end
 
 function string:lang( lang )
-    return langblock:format(lang, self:sanitize())
+    return langblock:format(lang, self)
 end
 
 function string:bold(  )
@@ -78,7 +78,7 @@ function string:strike(  )
 end
 
 function string:snippet()
-    return snippet:format(self:sanitize())
+    return snippet:format(self)
 end
 
 function string:trim() return self:gsub("^%s*(.-)%s*$","%1",1) end

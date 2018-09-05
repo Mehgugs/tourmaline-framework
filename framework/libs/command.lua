@@ -43,7 +43,7 @@ function Command:initial( options )
     options.__commands = nil
     options.__aliases = nil
     options.__help = nil
-    util.merge(self, options)
+    util.mergeShallow(self, options)
     assert(self.body, "Cannot create command without a function body.")
     self.prefix = self.prefix or ""
     if not self.name then self.name = "";

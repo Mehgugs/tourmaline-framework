@@ -35,12 +35,12 @@ function Embed:extend(t)
 end
 
 function etype(t, v, f) 
-    if type(v) ~= t then error(("Type of argument%s%s must be a %s"):format(f and " " or "",f or "",t), 3) end 
+    if type(v) ~= t then error(("Type of argument%s%s must be a %s"):format(f and " " or "",f or "",t)) end 
     return true
 end
 
 function eassert(v, msg, ...)
-    return v or error(msg:format(...),3)
+    return v or error(msg:format(...))
 end
 
 function Embed:initial(o)
@@ -136,7 +136,7 @@ end
 
 Embed:prop"url"
 function Embed:url(u) 
-    if etype('string', str, 1) then 
+    if etype('string', u, 1) then 
         if eassert(syntax.is_url(u), "Input was not a valid url: %q", u) then 
             self._embed.url = u 
             return self  
@@ -227,7 +227,7 @@ function Embed:author(v)
     local name = v.name 
     if etype('string', name) then
         local len = eassert(utf8_len(name), "String %q was not utf8 encoded text!", name)
-        if eassert(len <= 256, "Embed footer.text must be 2048 characters or less!") then
+        if eassert(len <= 256, "Embed author.name must be 2048 characters or less!") then
             self._embed.author = {}
             self._embed.author.name = name 
             self._capacity = self._capacity - len

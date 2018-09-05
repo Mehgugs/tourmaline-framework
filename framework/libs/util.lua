@@ -125,6 +125,17 @@ function util.merge(t1, t2)
     return t1
 end
 
+function util.mergeShallow(t1, t2)
+    for k, v in pairs(t2) do
+        if type(v) == "table" and type(t1[k]) == "table" then
+            t1[k] = util.mergeShallow(util.mergeShallow({}, t1[k]), v)
+        else
+            t1[k] = v
+        end
+    end
+    return t1
+end
+
 local insert = table.insert
 function util.mergeLists(l1, l2)
     for _, v in ipairs(l2) do 

@@ -6,6 +6,8 @@ local isObject = discordia.class.isObject
 
 local insert, remove, unpack = table.insert, table.remove, table.unpack
 
+local proxies = setmetatable({}, {__mode = "k"})
+
 local Log = require"oop/loggable-object"
 
 local DiscordiaProxy = Log:extend
@@ -15,7 +17,7 @@ local DiscordiaProxy = Log:extend
 local idx = DiscordiaProxy.__index
 local obj = 'obj'
 function DiscordiaProxy:__index(k)
-    local m = rawget(self, obj)
+    local m = rawget(proxies[self], obj)
     if m and m[k] then 
         if self._perms[k] then
             local perms = type(self._perms[k]) == 'table' and self._perms[k] or self._perms
@@ -32,10 +34,11 @@ function DiscordiaProxy:__index(k)
     return idx(self, k)
 end
 
+
 function DiscordiaProxy:initial( obj, perms )
     self._perms = perms
     self.__info = self.__info .. '/' .. (obj.id or tostring(obj))
-    self.obj = obj
+    proxies[self] = obj
 end
 
 function DiscordiaProxy:new (obj, perms)

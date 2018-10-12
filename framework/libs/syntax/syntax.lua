@@ -48,9 +48,10 @@ local escapedQuote = P'\\"'/'"'
 local non_quote = escapedQuote + (1 - quote) 
 local word = 1 - (quote + escapedQuote + l.space) 
 
-local quoted = mention_patt + (quote * Cs(non_quote^1) * quote) + C(word^1)
+local quoted =  (quote * Cs(non_quote^1) * quote) + C(word^1)
 
-local qstring = (fullspace * quoted * fullspace)^0
+local qstring = (mention_patt + (fullspace * quoted * fullspace))^0
+syntax.quote_or_word = quoted
 syntax.qstring = #(1-mention_patt)*qstring
 
 function syntax.enclosed_qstring(start, stop, predicated)
@@ -62,9 +63,9 @@ function syntax.enclosed_qstring(start, stop, predicated)
 
     local aug_word = 1 - (aug_quote + aug_escaped + l.space)
 
-    local aug_quoted = mention_patt + (quote * Cs(aug_nonQuote^1) * quote) + C(aug_word^1)
+    local aug_quoted =  (quote * Cs(aug_nonQuote^1) * quote) + C(aug_word^1)
 
-    local aug_qstring = (fullspace * aug_quoted * fullspace)^0
+    local aug_qstring = (mention_patt +(fullspace * aug_quoted * fullspace))^0
     if predicated then
         return start * (#(P(1)-stop)*aug_qstring) * stop
     else

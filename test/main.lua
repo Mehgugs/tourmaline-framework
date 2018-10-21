@@ -8,6 +8,5 @@ T(function(client)
     client:on('ready', function() 
         Logger:log(3, "Online!")
     end)
-    T.Command.enrich(client)
     return TOKEN
 end)

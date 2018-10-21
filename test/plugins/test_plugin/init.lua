@@ -20,9 +20,7 @@ local CoreCommand = T.Command:extend{
     __pipes = false,
     conds = {
         predicates = {
-            util.guild_only, 
-            util.in_correct_channel, 
-            util.has_admin
+            util.guild_only
         }
     },
     group = CoreGroup
@@ -103,6 +101,23 @@ local function command_spy(cmd, msg, id)
     end
 end
 
+local function command_testDelete(_, msg)
+    local h1 = msg:reply('With Cache.lua patch id:')
+    local r = msg:reply('DEL')
+    h1:setContent(h1.content .. r.id)
+    local count = #msg.channel.messages
+    coroutine.wrap(function()
+        local success = plugin.client:waitFor('messageDelete', 1e6, function(m) return m.id == r.id end)
+        return success and msg:reply('Message Delete was called for this delete, id:' .. r.id)
+    end)()
+    coroutine.wrap(function()
+        local success, _, m = plugin.client:waitFor('messageDeleteUncached', 1e6, function(_,m) return m == r.id end)
+        return success and msg:reply('Message Delete __Uncached__ was called for this delete, id:'.. m)
+    end)()
+    r:delete()
+    msg:reply('Message Count Delta:  '..(#msg.channel.messages - count))
+end
+
 CoreCommand{
     name = "reload",
     body = command_reload,
@@ -116,3 +131,13 @@ CoreCommand{
     usage = "[#channel] {id}",
     desc = "Gets information about a message."
 }
+
+
+CoreCommand{
+    name = "test-delete",
+    body = command_testDelete,
+    usage = "",
+    desc = ""
+}
+
+plugin.client:on('messageDelete', function(m) plugin:info("%s:%s %s", m.channel.id, m.id, m.content) end)
